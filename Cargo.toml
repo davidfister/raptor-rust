@@ -1,0 +1,9 @@
+[package]
+name = "rust-raptor"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+#rust_qsim = { path = "../../../../parallel_qsim_rust/rust_qsim" }
+rust_qsim = { git = "https://github.com/matsim-vsp/parallel_qsim_rust" }
+intmap = "3.1.3"

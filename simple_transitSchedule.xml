@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE transitSchedule SYSTEM "http://www.matsim.org/files/dtd/transitSchedule_v1.dtd">
+
+<transitSchedule>
+	<transitStops>
+		<stopFacility id="11_1" x="682947.637268434" y="4825919.285100707" linkRefId="11_1" name="stopOn11_1" isBlocking="false"/>
+		<stopFacility id="11_2" x="682347.6863159449" y="4825911.613425049" linkRefId="11_2" name="stopOn11_2" isBlocking="false"/>
+		<stopFacility id="11_3" x="682347.6372159449" y="4825911.613425049" linkRefId="11_2" name="stopOn11_2" isBlocking="false"/>
+	</transitStops>
+	<transitLine id="Line1">
+		<transitRoute id="11_1to11_2">
+			<transportMode>bus</transportMode>
+			<routeProfile>
+				<stop refId="11_1" arrivalOffset="00:01:00" departureOffset="00:01:00" awaitDeparture="false"/>
+				<stop refId="11_2" arrivalOffset="00:02:00" departureOffset="00:02:00" awaitDeparture="false"/>
+			</routeProfile>
+			<route>
+				<link refId="11_1"/>
+				<link refId="11_2"/>
+			</route>
+			<departures>
+				<departure id="1" departureTime="06:00:00" vehicleRefId="bus_Line1_1"/>
+			</departures>
+		</transitRoute>
+	</transitLine>
+	<transitLine id="Line2">
+		<transitRoute id="11_2to11_3">
+			<transportMode>bus</transportMode>
+			<routeProfile>
+				<stop refId="11_2" arrivalOffset="00:03:00" departureOffset="00:03:00" awaitDeparture="false"/>
+				<stop refId="11_3" arrivalOffset="00:03:20" departureOffset="00:04:00" awaitDeparture="false"/>
+			</routeProfile>
+			<route>
+				<link refId="11_2"/>
+				<link refId="11_3"/>
+			</route>
+			<departures>
+				<departure id="1" departureTime="06:00:00" vehicleRefId="bus_Line2_1"/>
+			</departures>
+		</transitRoute>
+	</transitLine>
+</transitSchedule>

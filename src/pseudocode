@@ -1,0 +1,89 @@
+//1 foreach i do
+//2 τi(·) ← ∞
+//3 τ ∗(·) ← ∞
+earliest_arrival : HashMap<Id<TransitRouteStop>, SimTime> = Max for every step
+earliest_arrival_last : HashMap<Id<TransitRouteStop>, SimTime> = Max for every step
+
+//4 τ0(ps) ← τ
+earliest_arrival[start] = starttime
+
+//5 mark ps
+marked_stops : Vec<Id<TransitRouteStop>>
+marked_stops.push(ps)
+
+//6 foreach k ← 1, 2, . . . do
+// Accumulate routes serving marked stops from previous round
+
+Q : HashMap<Id<Route>,Id<TransitStop>>
+
+for k in 1 ...
+    //7 Clear Q
+    Q.clear()
+    //8 foreach marked stop p do
+    for p in markedstops
+        //9 foreach route r serving p do
+        for r in get_routes_serving_stop(p)
+            //10 if (r, p′) ∈ Q for some stop p′ then and 12 else 13 Add (r, p) to Q
+            p_dash = try get r from Q else insert else insert r, p to q
+            //11 Substitute (r, p′) by (r, p) in Q if p comes before p′ in r
+            q.change(r, earlier_stop(r, p', p))
+    //14 unmark p
+    markedstops.clear()
+
+    // Traverse each route
+    //15 foreach route (r, p) ∈ Q do
+    for r in q.entries()
+        //16 t ← ⊥ // the current trip
+        t : Trip = NULL
+        //17 foreach stop pi of r beginning with p do
+        for pi in get_stops_after(r,p)
+            // Can the label be improved in this round? Includes local and target pruning
+            //18 if t =/= ⊥ and arr(t, pi) < min{τ ∗(pi), τ ∗(pt)} then
+            if t != Null && arrivalTime(t,pi) < min(best_arrivaltime(pi),best_arrival_time(pt)
+                //19 τk(pi) ← τarr(t, pi)
+                //20 τ ∗(pi) ← τarr(t, pi) (implicitly done)
+                best_arrival_time[pi] = arrivalTime(t,pi)
+                //21 mark pi
+                markedstops.add[pi]
+
+                // Can we catch an earlier trip at pi?
+                //22 if τk−1(pi) ≤ τdep(t, pi) then
+                if(earliset_arrival_last[pi] < get_departure_at(t,pi)
+                    //23 t ← et(r, pi)
+                    t = earliest_trip(r,pi)
+
+
+
+
+
+
+
+
+
+
+
+
+// Look at foot-paths
+24 foreach marked stop p do
+25 foreach foot-path (p, p′) ∈ F do
+26 τk(p′) ← min{τk(p′), τk(p) + `(p, p′)}
+27 mark p′
+// Stopping criterion
+28 if no stops are marked then
+29 stop
+
+
+
+prarellelization
+multicriteria
+- score
+
+alternative
+alternative routes?
+
+literatur
+implementierungs
+benchmarks
+wie weiter?
+
+-vgl mit library
