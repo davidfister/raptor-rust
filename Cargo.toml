@@ -7,3 +7,5 @@ edition = "2021"
 #rust_qsim = { path = "../../../../parallel_qsim_rust/rust_qsim" }
 rust_qsim = { git = "https://github.com/matsim-vsp/parallel_qsim_rust" }
 intmap = "3.1.3"
+rand = "0.9.4"
+nohash-hasher = "0.2.0"
