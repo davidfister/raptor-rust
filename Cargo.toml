@@ -9,3 +9,9 @@ rust_qsim = { git = "https://github.com/matsim-vsp/parallel_qsim_rust" }
 intmap = "3.1.3"
 rand = "0.9.4"
 nohash-hasher = "0.2.0"
+hotpath = "0.23"
+
+[features]
+hotpath = ["hotpath/hotpath"]
+hotpath-cpu = ["hotpath/hotpath-cpu"]
+hotpath-alloc = ["hotpath/hotpath-alloc"]

@@ -1,5 +1,5 @@
 //1 foreach i do
-//2 τi(·) ← ∞
+    //2 τi(·) ← ∞
 //3 τ ∗(·) ← ∞
 earliest_arrival : HashMap<Id<TransitRouteStop>, SimTime> = Max for every step
 earliest_arrival_last : HashMap<Id<TransitRouteStop>, SimTime> = Max for every step

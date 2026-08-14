@@ -1,16 +1,33 @@
 mod footpaths;
 
 use std::path::Path;
-use rust_qsim::simulation::pt::{TransitDeparture, TransitRoute, TransitRouteStop, TransitSchedule, TransitStopFacility};
+use rust_qsim::simulation::pt::{TransitDeparture, TransitLine, TransitRoute, TransitRouteStop, TransitSchedule, TransitStopFacility};
 use std::collections::{HashMap};
+use hotpath::Route;
 use rust_qsim::simulation::id::Id;
 use rust_qsim::simulation::time::SimTime;
 use rand::seq::IteratorRandom;
 
-pub struct TransitTrip {
+//What do i need:
+//Storing Arrival Times > Vec<SimTime>
+//Q: Vec<(u32, u32)>
+//Routes: Vec<Route>
+//Route: {stops: Vec<u32>, trips: Vec<u32>}
+//Trips: {route: u32, departures: Vec<SimTime>}
+//I define Routes and Trips somewhere in main. Whenever i need the actual values, i do e.g. routes[id] and get back a reference(?) to a vector
+
+//TODO: For every stop, precompute routes serving this stop and the INDEX of the stop in this route
+type RaptorRouteId = usize;
+type RaptorStopId = usize;
+
+type RaptorTripId = usize;
+type RaptorTime = usize;
+
+struct TransitTrip {
     pub route: TransitRoute,
     pub departure: SimTime,
 }
+
 impl TransitTrip {
     pub fn from_route(route: TransitRoute, departure: SimTime) -> Self {
         TransitTrip {
@@ -19,20 +36,37 @@ impl TransitTrip {
         }
     }
 }
-fn get_earlier_stop(
+
+struct RaptorTrip {
+    pub route: RaptorRouteId,
+    pub arrivals: Vec<RaptorTime>
+}
+
+struct RaptorNetwork {
+    pub routes: Vec<RaptorRoute>,
+    pub trips: Vec<RaptorTrip>
+}
+
+struct RaptorRoute{
+    pub stops: Vec<RaptorStopId>,
+    pub trips: Vec<RaptorTripId>
+}
+#[hotpath::measure]
+fn get_earlier_stop<'a>(
     route: &TransitRoute,
-    left: Id<TransitStopFacility>,
-    right: Id<TransitStopFacility>
-) -> Id<TransitStopFacility> {
-    let stops = route.stops.clone();
-    let l = stops.iter().position(|s| s.facility_id == left).unwrap();
-    let r = stops.iter().position(|s| s.facility_id == right).unwrap();
+    left: &'a Id<TransitStopFacility>,
+    right: &'a Id<TransitStopFacility>
+) -> &'a Id<TransitStopFacility> {
+    let l = route.stops.iter().position(|s| &s.facility_id == left).unwrap();
+    let r = route.stops.iter().position(|s| &s.facility_id == right).unwrap();
     return if l < r {
         left
     } else {
         right
     }
 }
+
+#[hotpath::measure]
 fn get_stops_after<'a>(
     route: &'a TransitRoute,
     stop: &Id<TransitStopFacility>
@@ -45,7 +79,7 @@ fn get_stops_after<'a>(
 
     &route.stops[pos..]
 }
-
+#[hotpath::measure]
 fn get_routes_serving_stop<'a>(
     stop: &Id<TransitStopFacility>,
     index: &'a HashMap<Id<TransitStopFacility>, Vec<&'a TransitRoute>>
@@ -55,7 +89,7 @@ fn get_routes_serving_stop<'a>(
         .map(|v| v.as_slice())
         .unwrap_or(&[])
 }
-
+#[hotpath::measure]
 fn arrival_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
     //TODO check, vibecoded
     trip.route.stops
@@ -67,6 +101,7 @@ fn arrival_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Optio
         })
 }
 
+#[hotpath::measure]
 fn departure_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
     //TODO check, vibecoded
     trip.route.stops
@@ -78,6 +113,7 @@ fn departure_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Opt
         })
 }
 //TODO: Warning, vibecoded!
+#[hotpath::measure]
 fn get_earliest_trip(route: &TransitRoute, stop: &Id<TransitStopFacility>, time: &SimTime) ->  Option<TransitTrip> {
     let stop_offset = route
         .stops
@@ -99,26 +135,80 @@ fn get_earliest_trip(route: &TransitRoute, stop: &Id<TransitStopFacility>, time:
             departure: depart.departure_time,
         })
 }
+
+#[hotpath::measure]
+fn load_schedule(path_str: &str) -> TransitSchedule {
+    let path = Path::new(path_str);
+    TransitSchedule::from_file(path)
+}
+
+fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
+    let mut stop_ids : HashMap<Id<TransitStopFacility>,RaptorStopId> = HashMap::new();
+    let mut route_ids : HashMap<Id<TransitRoute>,RaptorRouteId> = HashMap::new();
+
+    for id in schedule.facilities().keys() {
+        let raptor_id = stop_ids.len();
+        stop_ids.insert(id.clone(), raptor_id);
+    }
+
+    for (line_id, line) in schedule.lines(){
+        for (route_id, route) in line.routes.iter(){
+            let raptor_id = route_ids.len();
+            route_ids.insert(route_id.clone(),raptor_id);
+        }
+    }
+
+
+
+    let mut raptor_routes = Vec::new();
+    let mut raptor_trips : Vec<RaptorTrip> = Vec::new();
+
+
+    for (line_id, line) in schedule.lines(){
+        for (route_id, route) in line.routes.iter(){
+            let mut raptor_stops : Vec<RaptorStopId> = Vec::new();
+            let mut raptor_trip_ids : Vec<RaptorTripId> = Vec::new();
+
+            for stop in route.stops.iter(){
+                raptor_stops.push(stop_ids.get(&stop.facility_id).unwrap().clone());
+            }
+            for dep in route.departures.iter(){
+                let raptor_route_id = raptor_routes.len();
+                let mut raptor_arrivals : Vec<RaptorTime> = Vec::new();
+                for s in route.stops.iter(){
+                    ra
+                }
+            }
+            todo!("-Add raptor Trips to raptor route, add raptor route to route vector");
+            raptor_routes.push(RaptorRoute{stops: raptor_stops, trips: raptor_trip_ids})
+
+        }
+
+    }
+
+    let a : RaptorNetwork = RaptorNetwork {
+        routes: raptor_routes,
+        trips: raptor_trips,
+    };
+    a
+}
+
+#[hotpath::main]
 fn main() {
     println!("Loading schedule...");
 
-    let path = Path::new("berlin-v7.1-10pct_transitSchedule.xml");
-    let schedule = TransitSchedule::from_file(path);
+    let schedule = load_schedule("oberlausitz-dresden-v2025.0-transitSchedule.xml");
 
     println!("Loading done.");
-
-    let lines = schedule.lines();
-
-    let facilities = schedule.facilities();
 
 
 
     //init
 
+    let network : RaptorNetwork = generate_network(&schedule);
 
 
-
-    let mut routes: Vec<&TransitRoute> = Vec::new();
+    /*let mut routes: Vec<&TransitRoute> = Vec::new();
     let mut routes_map: HashMap<Id<TransitRoute>,&TransitRoute> = HashMap::new();
     let footpaths = footpaths::build_footpath_graph(&facilities, 1000.0);
 
@@ -148,9 +238,8 @@ fn main() {
     //foreach k ← 1, 2, . . . do
 
     let mut rng = rand::rng();
-    use std::time::Instant;
-    let now = Instant::now();
-    for i in 1..100 {
+
+    for i in 1..2 {
         //
         println!("{}", i);
         let mut selected = facilities.keys().choose_multiple(&mut rng, 2);
@@ -176,6 +265,8 @@ fn main() {
 
         let mut q: HashMap<Id<TransitRoute>,Id<TransitStopFacility>> = HashMap::new();
 
+
+
         for k in 1..5 {
             // Accumulate routes serving marked stops from previous round
             // 7 Clear Q
@@ -189,7 +280,7 @@ fn main() {
                     let p_dash = q.entry(r.id.clone()).or_insert(p.clone());
 
                     //11 Substitute (r, p′) by (r, p) in Q if p comes before p′ in r
-                    *p_dash = get_earlier_stop(r, p.clone(), p_dash.clone());
+                    //p_dash = get_earlier_stop(r, &p, &p_dash);
                 }
             }
             //14 unmark p
@@ -272,9 +363,9 @@ fn main() {
 
             earliest_arrival_last_round = earliest_arrival.clone();
         }
-    }
-    let elapsed = now.elapsed();
-    println!("Elapsed: {:.2?}", elapsed);
+    }*/
 }
+
+
 
 
