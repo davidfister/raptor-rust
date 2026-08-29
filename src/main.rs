@@ -74,9 +74,12 @@ fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
 
             for stop in route.stops.iter(){
                 route_stops.push(stop_ids[&stop.facility_id]);
-                raptor_routes_at_stop[stop_ids.len()-1].push(RouteAtStop{
-                    route: raptor_route_id,
-                    stop_id: 0}); //TODO set right Stop ID
+                let mut t = Vec::new();
+                t.push(
+                    RouteAtStop{
+                        route: raptor_route_id,
+                        stop_id: 0});
+                raptor_routes_at_stop.push(t) //TODO set right Stop ID
 
             }
             for dep in route.departures.iter(){
@@ -156,7 +159,7 @@ fn get_routes_serving_stop<'a>(
         .unwrap_or(&[])
 }
 #[hotpath::measure]
-fn arrival_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
+/*fn arrival_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
     //TODO check, vibecoded
     trip.route.stops
         .iter()
@@ -165,10 +168,10 @@ fn arrival_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Optio
             s.arrival_offset
                 .map(|offset| trip.departure.saturating_add(offset))
         })
-}
+}*/
 
 #[hotpath::measure]
-fn departure_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
+/*fn departure_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
     //TODO check, vibecoded
     trip.route.stops
         .iter()
@@ -177,10 +180,10 @@ fn departure_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Opt
             s.departure_offset
                 .map(|offset| trip.departure.saturating_add(offset))
         })
-}
+}*/
 //TODO: Warning, vibecoded!
 #[hotpath::measure]
-fn get_earliest_trip(route: &TransitRoute, stop: &Id<TransitStopFacility>, time: &SimTime) ->  Option<TransitTrip> {
+/*fn get_earliest_trip(route: &TransitRoute, stop: &Id<TransitStopFacility>, time: &SimTime) ->  Option<TransitTrip> {
     let stop_offset = route
         .stops
         .iter()
@@ -201,14 +204,14 @@ fn get_earliest_trip(route: &TransitRoute, stop: &Id<TransitStopFacility>, time:
             departure: depart.departure_time,
         })
 }
-
+*/
 #[hotpath::measure]
 fn load_schedule(path_str: &str) -> TransitSchedule {
     let path = Path::new(path_str);
     TransitSchedule::from_file(path)
 }
 
-fn raptor(network: &RaptorNetwork, start : RaptorStopId, stop: RaptorStopId, rounds : usize) -> () {
+/*fn raptor(network: &RaptorNetwork, start : RaptorStopId, stop: RaptorStopId, rounds : usize) -> () {
     let mut q: HashMap<RaptorRouteId,RaptorStopId> = HashMap::new();
     let mut marked_stops : Vec<RaptorStopId> = Vec::new();
     let mut earliest_arrival: Vec<Duration> = Vec::new();
@@ -315,7 +318,6 @@ fn raptor(network: &RaptorNetwork, start : RaptorStopId, stop: RaptorStopId, rou
         earliest_arrival_last_round = earliest_arrival.clone();
     }
 }*/
-}
 
 #[hotpath::main]
 fn main() {

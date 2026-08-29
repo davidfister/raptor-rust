@@ -1,0 +1,12 @@
+Done:
+Convert Id<TransitStopFacitity> (stops) to RaptorStopId
+-> Store in stop_ids
+Convert Id<TransitRoute> to raptor Route
+-> Store in route_ids
+
+TODO:
+Vec for mapping RaptorRouteId to RaptorRoute
+Vec for mapping RaptorTripId to RaptorTrip
+Generating RaptorTrip out of routes
+Generating RaptorRoute out of TransitRoute
+Generating RoutesAtStop Vector
