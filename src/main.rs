@@ -4,13 +4,13 @@ use rust_raptor::*;
 fn main() {
     println!("Loading schedule...");
 
-    let schedule = load_schedule("simple_transitSchedule.xml");
+    let schedule = load_schedule("data/simple_transitSchedule.xml");
 
     println!("Loading done.");
 
     //init
     let network = generate_network(&schedule);
-    let d = raptor(&network,3,1,5);
+    let d = raptor(&network,0,3,5);
     let t = d.as_secs()/60;
     println!("{t}")
 

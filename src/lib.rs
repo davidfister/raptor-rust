@@ -22,7 +22,7 @@ pub struct RaptorTrip {
 
 pub struct RouteAtStop {
     route: RaptorRouteId,
-    stop_id: RaptorStopId,
+    stop_idx: usize,
 }
 pub struct RaptorNetwork {
     pub routes: Vec<RaptorRoute>,
@@ -67,13 +67,13 @@ pub fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
             let mut route_stops : Vec<RaptorStopId> = Vec::new();
             let mut route_trips : Vec<RaptorTripId> = Vec::new(); //TODO test with preallocation
 
-            for stop in route.stops.iter(){
-                route_stops.push(stop_ids[&stop.facility_id]);
-                raptor_routes_at_stop[stop_ids[&stop.facility_id]].push(
+            for (idx, stop) in route.stops.iter().enumerate(){
+                let stop_id = stop_ids[&stop.facility_id];
+                route_stops.push(stop_id);
+                raptor_routes_at_stop[stop_id].push(
                     RouteAtStop{
                         route: raptor_route_id,
-                        stop_id: 0}); //TODO set right Stop ID, it does not have to be stop id but index of stop in the route array
-
+                        stop_idx: idx});
             }
             //TODO move trips into route?
             for dep in route.departures.iter(){
@@ -93,7 +93,7 @@ pub fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
                 });
             }
 
-            raptor_routes.insert(route_ids.get(route_id).unwrap().clone(),RaptorRoute{stops: route_stops, trips: route_trips}); //TODO change to push
+            raptor_routes.push(RaptorRoute{stops: route_stops, trips: route_trips});
 
         }
 
@@ -128,6 +128,7 @@ pub fn raptor(network: &RaptorNetwork, start : RaptorStopId, destination: Raptor
     let mut Q : HashMap<RaptorRouteId,RaptorStopId> = HashMap::new();
 
     for k in 0.. rounds{
+        let earliest_arrival_last_round : Vec<Duration> = earliest_arrival.clone();
         Q.clear();
 
         for p in &marked_stops{
@@ -143,16 +144,16 @@ pub fn raptor(network: &RaptorNetwork, start : RaptorStopId, destination: Raptor
         for (r, p) in Q.iter(){
             let mut t : Option<RaptorTripId> = None;
 
-            for p_i in network.routes[*r].stops[get_stop_index(&network.routes[*r], *p)..].iter() {
-                if t != None && arrival_at_stop(&network.trips[t.unwrap()],&network.routes[*r], *p) < earliest_arrival[*p_i]{
-                    earliest_arrival[*p_i] = arrival_at_stop(&network.trips[t.unwrap()],&network.routes[*r], *p);
+            for p_i in network.routes[*r].stops[get_stop_index(&network.routes[*r], *p)..].iter() { //TODO put index in Q
+                if t != None && arrival_at_stop(&network.trips[t.unwrap()],&network.routes[*r], *p_i) < earliest_arrival[*p_i]{
+                    earliest_arrival[*p_i] = arrival_at_stop(&network.trips[t.unwrap()],&network.routes[*r], *p_i);
                     marked_stops.push(*p_i);
                 }
-                if t != None && earliest_arrival[*p_i] < departure_at_stop(&network.trips[t.unwrap()],&network.routes[*r], *p){
-                    t = Option::from(earliest_catchable_trip_at_stop(&network.trips, &network.routes[*r], *p, &earliest_arrival));
+                if t != None && earliest_arrival_last_round[*p_i] <= departure_at_stop(&network.trips[t.unwrap()], &network.routes[*r], *p_i) {
+                    t = earliest_catchable_trip_at_stop(&network, &network.routes[*r], *p_i, &earliest_arrival_last_round);
                 }
                 else if t == None{
-                    t = Option::from(earliest_catchable_trip_at_stop(&network.trips, &network.routes[*r], *p, &earliest_arrival));
+                    t = earliest_catchable_trip_at_stop(&network, &network.routes[*r], *p_i, &earliest_arrival_last_round); //TODO check correctness
                 }
             }
         }
@@ -160,10 +161,11 @@ pub fn raptor(network: &RaptorNetwork, start : RaptorStopId, destination: Raptor
     earliest_arrival[destination]
 }
 
-fn earliest_catchable_trip_at_stop(trips : &Vec<RaptorTrip>, route : &RaptorRoute, stop : RaptorStopId, earliest_arrival : &Vec<Duration>) -> Option<RaptorTripId> {
+fn earliest_catchable_trip_at_stop(network: &RaptorNetwork, route : &RaptorRoute, stop : RaptorStopId, earliest_arrival : &Vec<Duration>) -> Option<RaptorTripId> { //TODO cleanup
     let stops = &route.stops;
     let p = stops.iter().position(|&s| s == stop).unwrap(); //TODO: faster way to do this?
-    trips.iter().position(|t| t.departures[p] <= earliest_arrival[p]) //TODO: this can be done better
+
+    route.trips.iter().copied().find(|&t| network.trips[t].departures[p] >= earliest_arrival[stop])
 }
 
 fn arrival_at_stop(trip : &RaptorTrip, route : &RaptorRoute, stop : RaptorStopId) -> Duration {
@@ -190,4 +192,30 @@ fn get_stop_index(route : &RaptorRoute, stop : RaptorStopId) -> usize {
     stops.iter().position(|&s| s == stop).unwrap()
 }
 
+mod tests {
+    use std::time::Duration;
+    use crate::{earliest_catchable_trip_at_stop, generate_network, load_schedule};
 
+    #[test]
+    fn test_earliest_trip(){
+        let schedule = load_schedule("simple_transitSchedule.xml");
+        let network = generate_network(&schedule);
+        let mut earliest_arrival : Vec<Duration> = (0..network.stop_ids.len())
+            .map(|_| Duration::MAX)
+            .collect(); //TODO best way to do it?
+        println!("{:?}", &network.routes[0].stops);
+        println!("{:?}", &network.route_ids);
+
+        for (_,line) in schedule.lines(){
+            for (route_id, route) in line.routes.iter(){
+                println!("{:?}", route);
+                println!("{:?}", &network.route_ids[&route.id]);
+            }
+        }
+
+        assert_eq!(earliest_catchable_trip_at_stop(&network, &network.routes[0], 0, &earliest_arrival), None);
+        earliest_arrival[0] = Duration::ZERO;
+        assert!(!earliest_catchable_trip_at_stop(&network, &network.routes[0], 0, &earliest_arrival).is_none());
+    }
+
+}
