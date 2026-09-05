@@ -4,15 +4,19 @@ use rust_raptor::*;
 fn main() {
     println!("Loading schedule...");
 
-    let schedule = load_schedule("data/simple_transitSchedule.xml");
+    let schedule = load_schedule("data/berlin-v7.1-10pct_transitSchedule.xml");
 
     println!("Loading done.");
 
     //init
     let network = generate_network(&schedule);
-    let d = raptor(&network,0,3,5);
-    let t = d.as_secs()/60;
-    println!("{t}")
+    for i in 0..10{
+        println!("{i}");
+        let result =  raptor(&network,1,i+1,10);
+    }
+
+
+
 
 
     /*for (i,r) in network.routes.iter().enumerate(){

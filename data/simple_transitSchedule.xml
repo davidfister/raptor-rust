@@ -55,8 +55,8 @@
 				<link refId="g"/>
 			</route>
 			<departures>
-				<departure id="1" departureTime="00:30:00" vehicleRefId="S1one"/>
-				<departure id="2" departureTime="01:30:00" vehicleRefId="S1two"/>
+				<departure id="1" departureTime="00:00:00" vehicleRefId="S1one"/>
+				<departure id="2" departureTime="00:60:00" vehicleRefId="S1two"/>
 			</departures>
 		</transitRoute>
 	</transitLine>
