@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package routing;
+
+service RoutingService {
+  rpc GetRoute (Request) returns (Response);
+}
+
+message Request {
+  uint32 start_stop_id = 1;
+  uint32 destination_stop_id = 2;
+  uint32 rounds = 3;
+}
+
+message Response {
+  uint64 duration_seconds = 1;
+}
