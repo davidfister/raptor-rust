@@ -86,5 +86,4 @@ fn bench_raptor_simple(c: &mut Criterion) {
 }
 
 criterion_group!(benches, bench_raptor_berlin, bench_raptor_dresden, bench_raptor_simple);
-
 criterion_main!(benches);

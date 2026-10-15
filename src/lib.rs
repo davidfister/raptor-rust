@@ -115,7 +115,7 @@ pub fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
 
     let mut grid: HashMap<(i32, i32), Vec<RaptorStopId>> = HashMap::new();
 
-    const MAX_WALK_DISTANCE: f64 = 2500.0;
+    const MAX_WALK_DISTANCE: f64 = 500.0;
     fn cell(x: f64, y: f64) -> (i32, i32) {
         (
             (x / MAX_WALK_DISTANCE).floor() as i32,
@@ -188,6 +188,7 @@ pub fn raptor(
     rounds : usize
 ) -> usize {
     let mut earliest_arrival : Vec<RaptorTime> = vec![usize::MAX;network.stop_ids.len()];
+    let mut earliest_arrival_last_round = vec![usize::MAX;network.stop_ids.len()];
 
     earliest_arrival[start] = 0;
 
@@ -196,18 +197,23 @@ pub fn raptor(
     let mut q_raptor_route_ids: Vec<RaptorRouteId> = Vec::new();
     let mut q_route_based_index: Vec<usize> = vec![usize::MAX; network.routes.len()]; //Storing Route and Route based index
 
-    let mut earliest_arrival_last_round = Vec::with_capacity(network.stop_ids.len());
 
     let mut round = 0;
     let mut max_rounds = rounds;
+    let mut is_marked = vec![false; network.stop_ids.len()];
+
     while round < max_rounds{
         round += 1;
-        earliest_arrival_last_round.clone_from(&earliest_arrival);
-
+        if marked_stops.is_empty() {
+            break;
+        }
+        for &s in &marked_stops {
+            earliest_arrival_last_round[s] = earliest_arrival[s];
+        }
         q_raptor_route_ids.clear();
         q_route_based_index.fill(usize::MAX);
 
-        if earliest_arrival[start] != usize::MAX {
+        if earliest_arrival[destination] != usize::MAX {
             max_rounds = max_rounds.min(round + 3);
         }
 
@@ -234,7 +240,9 @@ pub fn raptor(
                     let arrival = arrival_at_stop(trip,route, stop_index);
 
                     if arrival < earliest_arrival[destination] && arrival < earliest_arrival[*stop_id]{
-                        marked_stops.push(*stop_id);
+                        if !is_marked[*stop_id] {
+                            is_marked[*stop_id] = true;
+                            marked_stops.push(*stop_id); }
                         earliest_arrival[*stop_id] = arrival;
                     }
                     if earliest_arrival_last_round[*stop_id] <= departure_at_stop(trip, route, stop_index) {
@@ -252,7 +260,7 @@ pub fn raptor(
             for footpath in &network.footpaths[*m] {
                 let new_arrival = earliest_arrival[*m] + footpath.duration;
 
-                if new_arrival < earliest_arrival[footpath.to] {
+                if new_arrival < earliest_arrival[footpath.to] && new_arrival < earliest_arrival[destination] {
                     earliest_arrival[footpath.to] = new_arrival;
                     temp_v.push(footpath.to);
                 }
@@ -263,17 +271,14 @@ pub fn raptor(
     earliest_arrival[destination]
 }
 
-#[hotpath::measure]
 fn earliest_catchable_trip_at_stop(network: &RaptorNetwork, route : &RaptorRoute, stop : RaptorStopId, stop_index : usize, earliest_arrival : &[usize], ) -> Option<RaptorTripId> { //TODO cleanup
     route.trips.iter().copied().find(|&t| network.trips[t].departures[stop_index] >= earliest_arrival[stop])
 }
 
-#[hotpath::measure]
 fn arrival_at_stop(trip : &RaptorTrip, _route : &RaptorRoute, stop_index : usize) -> usize {
     trip.arrivals[stop_index]
 }
 
-#[hotpath::measure]
 fn departure_at_stop(trip : &RaptorTrip, _route : &RaptorRoute, stop_index : usize) -> usize {
     trip.departures[stop_index]
 }
