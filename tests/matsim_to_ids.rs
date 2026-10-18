@@ -29,12 +29,10 @@ mod tests {
         // }
 
     }
-    #[test]
     fn test_simple(){
         //test("simple_transitSchedule.xml")
 
     }
-    #[test]
     fn test_dresden() {
         //test("oberlausitz-dresden-v2025.0-transitSchedule.xml")
     }

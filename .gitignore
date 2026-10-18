@@ -6,3 +6,4 @@ perf.data
 *.data
 perf.data.old
 *.data.old
+.tools
