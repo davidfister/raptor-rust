@@ -6,9 +6,14 @@ service RoutingService {
   rpc GetRoute (Request) returns (Response);
 }
 
+message Coordinate {
+  double x = 1;
+  double y = 2;
+}
+
 message Request {
-  uint32 start_stop_id = 1;
-  uint32 destination_stop_id = 2;
+  Coordinate start = 1;
+  Coordinate destination = 2;
   uint32 rounds = 3;
 }
 

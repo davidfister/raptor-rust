@@ -44,15 +44,15 @@ impl RoutingService for MyRoutingService {
 
         let request = request.into_inner();
         let network = Arc::clone(&self.network);
-        let start = request.start_stop_id as usize;
-        let destination = request.destination_stop_id as usize;
+        let start = request.start;
+        let destination = request.destination ;
         let rounds = request.rounds as usize;
 
         let duration = tokio::task::spawn_blocking(move || {
             raptor(
                 &network,
-                start,
-                destination,
+                (start.unwrap().x, start.unwrap().y),
+                (destination.unwrap().x , destination.unwrap().y),
                 rounds,
             )
         })
