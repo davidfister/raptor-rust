@@ -67,6 +67,7 @@ pub fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
         for (route_id, _) in line.routes.iter(){
             let raptor_id = route_ids.len();
             route_ids.insert(route_id.clone(),raptor_id);
+            println!("{}", route_id);
         }
     }
 
@@ -97,7 +98,7 @@ pub fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
                 let mut raptor_arrivals : Vec<RaptorTime> = Vec::new();
                 let mut raptor_departures : Vec<RaptorTime> = Vec::new();
                 for stop in route.stops.iter(){
-                    let arrival = stop.arrival_offset.unwrap().as_secs() + dep.departure_time.as_secs();
+                    let arrival = stop.arrival_offset.unwrap().as_secs() + dep.departure_time.as_secs(); //crash if arrival_offset is not set
                     raptor_arrivals.push(arrival as RaptorTime);
                     let departure = stop.departure_offset.unwrap().as_secs() + dep.departure_time.as_secs();
                     raptor_departures.push(departure as RaptorTime);
@@ -195,6 +196,7 @@ pub fn raptor(
     network: &RaptorNetwork,
     start: (f64, f64),
     destination: (f64, f64),
+    departure_time: RaptorTime,
     rounds : usize
 ) -> usize {
 
@@ -241,7 +243,7 @@ pub fn raptor(
                 if dist_sq <= max_distance_sq {
                     marked_stops.push(stop);
                     is_marked[stop] = true;
-                    earliest_arrival[stop] = 0 + (dist_sq.sqrt() / 0.83) as usize; //TODO change to departure time
+                    earliest_arrival[stop] = departure_time + (dist_sq.sqrt() / 0.83) as usize;
                 }
             }
         }
@@ -339,16 +341,22 @@ pub fn raptor(
         }
         let mut temp_v :  Vec<RaptorStopId> = Vec::new();
 
+
+        let times_before_footpath = earliest_arrival.clone();
+
         for m in marked_stops.iter(){
             for footpath in &network.footpaths[*m] {
-                let new_arrival = earliest_arrival[*m] + footpath.duration;
+                let new_arrival = times_before_footpath[*m] + footpath.duration;
 
                 if new_arrival < earliest_arrival[footpath.to] && new_arrival < earliest_arrival_destination {
                     earliest_arrival[footpath.to] = new_arrival;
+
                     if !is_marked[footpath.to] {
                         is_marked[footpath.to] = true;
                         temp_v.push(footpath.to);
                     }
+                    
+
                 }
             }
         }
