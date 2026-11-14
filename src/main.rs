@@ -1,371 +1,105 @@
-mod footpaths;
+use std::sync::Arc;
 
-use std::path::Path;
-use rust_qsim::simulation::pt::{TransitDeparture, TransitLine, TransitRoute, TransitRouteStop, TransitSchedule, TransitStopFacility};
-use std::collections::{HashMap};
-use hotpath::Route;
-use rust_qsim::simulation::id::Id;
-use rust_qsim::simulation::time::SimTime;
-use rand::seq::IteratorRandom;
+use tonic::{
+    transport::Server,
+    Request,
+    Response,
+    Status,
+};
 
-//What do i need:
-//Storing Arrival Times > Vec<SimTime>
-//Q: Vec<(u32, u32)>
-//Routes: Vec<Route>
-//Route: {stops: Vec<u32>, trips: Vec<u32>}
-//Trips: {route: u32, departures: Vec<SimTime>}
-//I define Routes and Trips somewhere in main. Whenever i need the actual values, i do e.g. routes[id] and get back a reference(?) to a vector
+use rust_raptor::{
+    generate_network,
+    load_schedule,
+    raptor,
+    RaptorNetwork,
+};
 
-//TODO: For every stop, precompute routes serving this stop and the INDEX of the stop in this route
-type RaptorRouteId = usize;
-type RaptorStopId = usize;
-
-type RaptorTripId = usize;
-type RaptorTime = usize;
-
-struct TransitTrip {
-    pub route: TransitRoute,
-    pub departure: SimTime,
+pub mod routing {
+    tonic::include_proto!("routing");
 }
 
-impl TransitTrip {
-    pub fn from_route(route: TransitRoute, departure: SimTime) -> Self {
-        TransitTrip {
-            route,
-            departure
-        }
-    }
+use routing::routing_service_server::{
+    RoutingService,
+    RoutingServiceServer,
+};
+
+use routing::{
+    Request as RouteRequest,
+    Response as RouteResponse,
+};
+
+
+#[derive(Clone)]
+struct MyRoutingService {
+    network: Arc<RaptorNetwork>,
 }
 
-struct RaptorTrip {
-    pub route: RaptorRouteId,
-    pub arrivals: Vec<RaptorTime>
-}
 
-struct RaptorNetwork {
-    pub routes: Vec<RaptorRoute>,
-    pub trips: Vec<RaptorTrip>
-}
+#[tonic::async_trait]
+impl RoutingService for MyRoutingService {
+    async fn get_route(
+        &self,
+        request: Request<RouteRequest>,
+    ) -> Result<Response<RouteResponse>, Status> {
 
-struct RaptorRoute{
-    pub stops: Vec<RaptorStopId>,
-    pub trips: Vec<RaptorTripId>
-}
-#[hotpath::measure]
-fn get_earlier_stop<'a>(
-    route: &TransitRoute,
-    left: &'a Id<TransitStopFacility>,
-    right: &'a Id<TransitStopFacility>
-) -> &'a Id<TransitStopFacility> {
-    let l = route.stops.iter().position(|s| &s.facility_id == left).unwrap();
-    let r = route.stops.iter().position(|s| &s.facility_id == right).unwrap();
-    return if l < r {
-        left
-    } else {
-        right
-    }
-}
+        let request = request.into_inner();
+        let network = Arc::clone(&self.network);
+        let start = request.start;
+        let destination = request.destination ;
+        let rounds = request.rounds as usize;
 
-#[hotpath::measure]
-fn get_stops_after<'a>(
-    route: &'a TransitRoute,
-    stop: &Id<TransitStopFacility>
-) -> &'a [TransitRouteStop] {
-    let pos = route
-        .stops
-        .iter()
-        .position(|s| s.facility_id == *stop)
-        .unwrap();
-
-    &route.stops[pos..]
-}
-#[hotpath::measure]
-fn get_routes_serving_stop<'a>(
-    stop: &Id<TransitStopFacility>,
-    index: &'a HashMap<Id<TransitStopFacility>, Vec<&'a TransitRoute>>
-) -> &'a [ &'a TransitRoute ] {
-    index
-        .get(stop)
-        .map(|v| v.as_slice())
-        .unwrap_or(&[])
-}
-#[hotpath::measure]
-fn arrival_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
-    //TODO check, vibecoded
-    trip.route.stops
-        .iter()
-        .find(|s| s.facility_id == stop.clone())
-        .and_then(|s| {
-            s.arrival_offset
-                .map(|offset| trip.departure.saturating_add(offset))
+        let duration = tokio::task::spawn_blocking(move || {
+            raptor(
+                &network,
+                (start.unwrap().x, start.unwrap().y),
+                (destination.unwrap().x , destination.unwrap().y),
+                0, //TODO
+                rounds,
+            )
         })
-}
+            .await
+            .map_err(|e| {
+                Status::internal(format!(
+                    "RAPTOR task failed: {}",
+                    e
+                ))
+            })?;
 
-#[hotpath::measure]
-fn departure_at_stop(trip: &TransitTrip, stop : &Id<TransitStopFacility>) -> Option<SimTime> {
-    //TODO check, vibecoded
-    trip.route.stops
-        .iter()
-        .find(|s| s.facility_id == stop.clone())
-        .and_then(|s| {
-            s.departure_offset
-                .map(|offset| trip.departure.saturating_add(offset))
-        })
-}
-//TODO: Warning, vibecoded!
-#[hotpath::measure]
-fn get_earliest_trip(route: &TransitRoute, stop: &Id<TransitStopFacility>, time: &SimTime) ->  Option<TransitTrip> {
-    let stop_offset = route
-        .stops
-        .iter()
-        .find(|s| s.facility_id == stop.clone())
-        .and_then(|s| s.departure_offset)?;
-
-    route
-        .departures
-        .iter()
-        .find(|depart| {
-            depart
-                .departure_time
-                .saturating_add(stop_offset)
-                >= *time
-        })
-        .map(|depart| TransitTrip {
-            route: route.clone(),
-            departure: depart.departure_time,
-        })
-}
-
-#[hotpath::measure]
-fn load_schedule(path_str: &str) -> TransitSchedule {
-    let path = Path::new(path_str);
-    TransitSchedule::from_file(path)
-}
-
-fn generate_network(schedule: &TransitSchedule) -> RaptorNetwork {
-    let mut stop_ids : HashMap<Id<TransitStopFacility>,RaptorStopId> = HashMap::new();
-    let mut route_ids : HashMap<Id<TransitRoute>,RaptorRouteId> = HashMap::new();
-
-    for id in schedule.facilities().keys() {
-        let raptor_id = stop_ids.len();
-        stop_ids.insert(id.clone(), raptor_id);
+        Ok(Response::new(RouteResponse {
+            duration_seconds: duration as u64,
+        }))
     }
-
-    for (line_id, line) in schedule.lines(){
-        for (route_id, route) in line.routes.iter(){
-            let raptor_id = route_ids.len();
-            route_ids.insert(route_id.clone(),raptor_id);
-        }
-    }
+}
 
 
+#[tokio::main(flavor = "multi_thread", worker_threads = 8)]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
-    let mut raptor_routes = Vec::new();
-    let mut raptor_trips : Vec<RaptorTrip> = Vec::new();
+    // Load your existing schedule
+    let schedule = load_schedule(
+        "data/berlin-v7.1-10pct_transitSchedule.xml"
+    );
 
+    // Build RAPTOR network once
+    let network = generate_network(&schedule);
 
-    for (line_id, line) in schedule.lines(){
-        for (route_id, route) in line.routes.iter(){
-            let mut raptor_stops : Vec<RaptorStopId> = Vec::new();
-            let mut raptor_trip_ids : Vec<RaptorTripId> = Vec::new();
-
-            for stop in route.stops.iter(){
-                raptor_stops.push(stop_ids.get(&stop.facility_id).unwrap().clone());
-            }
-            for dep in route.departures.iter(){
-                let raptor_route_id = raptor_routes.len();
-                let mut raptor_arrivals : Vec<RaptorTime> = Vec::new();
-                for s in route.stops.iter(){
-                    ra
-                }
-            }
-            todo!("-Add raptor Trips to raptor route, add raptor route to route vector");
-            raptor_routes.push(RaptorRoute{stops: raptor_stops, trips: raptor_trip_ids})
-
-        }
-
-    }
-
-    let a : RaptorNetwork = RaptorNetwork {
-        routes: raptor_routes,
-        trips: raptor_trips,
+    let service = MyRoutingService {
+        network: Arc::new(network),
     };
-    a
+
+    let address = "0.0.0.0:50052".parse()?;
+
+    println!(
+        "RAPTOR server listening on {}",
+        address
+    );
+
+    Server::builder()
+        .add_service(
+            RoutingServiceServer::new(service)
+        )
+        .serve(address)
+        .await?;
+
+    Ok(())
 }
-
-#[hotpath::main]
-fn main() {
-    println!("Loading schedule...");
-
-    let schedule = load_schedule("oberlausitz-dresden-v2025.0-transitSchedule.xml");
-
-    println!("Loading done.");
-
-
-
-    //init
-
-    let network : RaptorNetwork = generate_network(&schedule);
-
-
-    /*let mut routes: Vec<&TransitRoute> = Vec::new();
-    let mut routes_map: HashMap<Id<TransitRoute>,&TransitRoute> = HashMap::new();
-    let footpaths = footpaths::build_footpath_graph(&facilities, 1000.0);
-
-    //print_footpath_graph(&footpaths);
-    for (l , li) in lines {
-        for (r_id, r) in li.routes.iter() {
-            routes.push(r);
-            routes_map.insert(r_id.clone(), r);
-        }
-
-    }
-
-    let mut stop_to_routes: HashMap<
-        Id<TransitStopFacility>,
-        Vec<&TransitRoute>
-    > = HashMap::new();
-
-    for route in routes.iter() {
-        for stop in &route.stops {
-            stop_to_routes
-                .entry(stop.facility_id.clone())
-                .or_default()
-                .push(route);
-        }
-    }
-
-    //foreach k ← 1, 2, . . . do
-
-    let mut rng = rand::rng();
-
-    for i in 1..2 {
-        //
-        println!("{}", i);
-        let mut selected = facilities.keys().choose_multiple(&mut rng, 2);
-
-        let start_facility = selected.pop().unwrap();
-        let pt = selected.pop().unwrap();
-
-        let mut marked_stops : Vec<Id<TransitStopFacility>> = Vec::new();
-        marked_stops.push(start_facility.clone());
-
-        let mut earliest_arrival: HashMap<Id<TransitStopFacility>, SimTime> = HashMap::new();
-
-        for (f, _) in facilities.iter() {
-            earliest_arrival.insert(f.clone(), SimTime::from_nanos(u64::MAX));
-        }
-        let mut earliest_arrival_last_round: HashMap<Id<TransitStopFacility>, SimTime>;
-
-        if let Some(x) = earliest_arrival.get_mut(start_facility){
-            *x = SimTime::from_nanos(0);
-        }
-
-        earliest_arrival_last_round = earliest_arrival.clone();
-
-        let mut q: HashMap<Id<TransitRoute>,Id<TransitStopFacility>> = HashMap::new();
-
-
-
-        for k in 1..5 {
-            // Accumulate routes serving marked stops from previous round
-            // 7 Clear Q
-            q.clear();
-
-            // 8 foreach marked stop p do
-            for p in marked_stops.iter() {
-                // 9 foreach route r serving p do
-                for r in get_routes_serving_stop(p, &stop_to_routes) {
-                    //10 if (r, p′) ∈ Q for some stop p′ then and 12 else 13 Add (r, p) to Q                    // 11 Substitute (r, p′) by (r, p) in Q if p comes before p′ in r
-                    let p_dash = q.entry(r.id.clone()).or_insert(p.clone());
-
-                    //11 Substitute (r, p′) by (r, p) in Q if p comes before p′ in r
-                    //p_dash = get_earlier_stop(r, &p, &p_dash);
-                }
-            }
-            //14 unmark p
-            marked_stops.clear();
-            // Traverse each route
-            // 15 foreach route (r, p) ∈ Q do
-            for (r, p) in q.iter() {
-                //16 t ← ⊥ // the current trip
-                let mut trip: Option<TransitTrip> = None;
-
-                //17 foreach stop pi of r beginning with p do
-                for pi in get_stops_after(routes_map.get(r).unwrap(), p) {
-                    // Can the label be improved in this round? Includes local and target pruning
-                    //18 if t =/= ⊥ and arr(t, pi) < min{τ ∗(pi), τ ∗(pt)} then
-                    if let Some(tr) = &trip {
-                        if let Some(arr) =
-                            arrival_at_stop(tr, &pi.facility_id)
-                        {
-                            if arr < earliest_arrival[&pi.facility_id]
-                                && arr < earliest_arrival[&pt]
-                            {
-                                earliest_arrival.insert(
-                                    pi.facility_id.clone(),
-                                    arr,
-                                );
-
-                                marked_stops.push(
-                                    pi.facility_id.clone(),
-                                );
-                            }
-                        }
-                    }
-                    // Can we catch an earlier trip at pi?
-                    //22 if τk−1(pi) ≤ τdep(t, pi) then
-
-                    let should_board =
-                        trip
-                            .as_ref()
-                            .map(|tr| {
-                                earliest_arrival_last_round[&pi.facility_id]
-                                    <= departure_at_stop(tr, &pi.facility_id).unwrap()
-                            })
-                            .unwrap_or(true);
-
-                    if should_board {
-                        trip = get_earliest_trip(
-                            routes_map.get(r).unwrap(),
-                            &pi.facility_id,
-                            earliest_arrival_last_round
-                                .get(&pi.facility_id)
-                                .unwrap(),
-                        );
-                    }
-                }
-            }
-
-            let mut marked_stops_next_round: Vec<Id<TransitStopFacility>> = Vec::new();
-            for p in marked_stops.iter() {
-                if let Some(edges) = footpaths.get(p) {
-                    if let Some(&tp) = earliest_arrival.get(p) {
-                        for (p_dash, walk_time) in edges {
-                            let candidate = tp.saturating_add(walk_time.as_duration());
-
-                            let is_improvement = match earliest_arrival.get(p_dash) {
-                                Some(&current_best) => candidate < current_best,
-                                None => true,
-                            };
-
-                            if is_improvement {
-                                earliest_arrival.insert(p_dash.clone(), candidate);
-
-                                // 27 mark p′
-                                marked_stops_next_round.push(p_dash.clone());
-                            }
-                        }
-                    }
-                }
-            }
-            marked_stops.extend(marked_stops_next_round);
-
-            earliest_arrival_last_round = earliest_arrival.clone();
-        }
-    }*/
-}
-
-
-
-
